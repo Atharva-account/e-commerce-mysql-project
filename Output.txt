@@ -1,0 +1,443 @@
+Q3. Trigger to automatically update stock when order is placed
+
+Code:-
+CREATE TRIGGER UpdateStockAfterOrder
+AFTER INSERT ON OrderDetails
+FOR EACH ROW
+UPDATE Products
+SET Stock = Stock - NEW.Quantity
+WHERE ProductID = NEW.ProductID;
+
+Core Logic
+ - Fetch current stock.
+ - Compare it with ordered quantity.
+ - If insufficient → throw error.
+ - If sufficient → subtract quantity.
+
+Key Concepts Used
+BEFORE INSERT
+ - NEW.column_name
+ - SIGNAL for custom error
+ - Transactional integrity
+
+What It Prevents
+ - Overselling
+ - Negative stock
+ - Application-level validation failures
+
+Business Value
+ - Prevents overselling
+ - Avoids order cancellations due to stock errors
+ - Maintains real-time inventory accuracy
+
+Protects brand trust
+Q7 — View Showing Orders with Customer Names
+
+code:- 
+SELECT 
+    o.OrderID,
+    c.Name AS CustomerName,
+    o.OrderDate,
+    o.Status,
+    o.TotalAmount
+FROM Orders o
+JOIN Customers c 
+    ON o.CustomerID = c.CustomerID
+WHERE o.Status = 'Shipped';
+
+
+Purpose
+To simplify reporting by combining:
+ - Orders
+ - Customers
+
+What the View Does
+It creates a virtual table containing:
+ - OrderID
+ - CustomerName
+ - OrderDate
+ - Status
+ - TotalAmount
+
+Why Use a View?
+ - Avoid repeating JOIN logic
+ - Cleaner queries
+ - Centralized reporting abstraction
+ - Security control (limit direct table access)
+
+Business Value
+Customer service can instantly see order status.
+Managers can monitor shipped vs pending orders.
+Reporting becomes standardized.
+
+
+Q12 — .  How can you rank customers based on their total spending using a window function?
+
+code:-
+SELECT 
+    c.CustomerID,
+    c.Name,
+    SUM(o.TotalAmount) AS TotalSpent,
+    RANK() OVER (ORDER BY SUM(o.TotalAmount) DESC) AS SpendingRank
+FROM Customers c
+JOIN Orders o 
+    ON c.CustomerID = o.CustomerID
+GROUP BY c.CustomerID, c.Name;
+
+
+Purpose:-
+To rank customers by total spending.
+
+
+Key Concept: Window Function
+RANK() OVER (ORDER BY SUM(o.TotalAmount) DESC)
+
+What Happens
+ - Calculate total spending per customer
+ - Apply ranking over sorted totals
+ - Customers with equal spending get same rank
+Rank may skip numbers (because RANK() allows ties)
+
+Example
+Customer	TotalSpent	Rank
+A	            2000	1
+B	            1500	2
+C	            1500	2
+D	            1000	4
+Why Use Window Functions?
+  - Keeps detail rows
+  - More powerful than GROUP BY alone
+
+Business Value
+Reward top spenders (VIP programs)
+Offer targeted promotions
+Prevent churn among high-value users
+
+Q14 --   Categorizing Products by Price Range
+
+
+code:-
+SELECT 
+    ProductName,
+    Price,
+    CASE
+        WHEN Price < 50 THEN 'Low'
+        WHEN Price BETWEEN 50 AND 300 THEN 'Medium'
+        ELSE 'High'
+    END AS PriceCategory
+FROM Products;
+
+
+Purpose
+To segment products into pricing tiers.
+
+Tool Used: CASE Expression
+CASE
+    WHEN Price < 50 THEN 'Low'
+    WHEN Price BETWEEN 50 AND 300 THEN 'Medium'
+    ELSE 'High'
+END
+
+What This Does
+ - Creates a derived classification column:
+ - Low (< $50)
+ - Medium ($50–$300)
+ - High (> $300)
+
+Why Useful?
+ - Pricing strategy analysis
+ - Marketing segmentation
+ - Inventory positioning
+ - This is computed dynamically — not stored in table.
+
+Business Value
+Identify gaps in pricing tiers
+Adjust pricing strategy
+Optimize product mix
+
+
+Q15 — Unique Delivered Orders per Customer
+
+code:- 
+SELECT 
+    c.CustomerID,
+    c.Name,
+    COUNT(DISTINCT o.OrderID) AS DeliveredOrders
+FROM Customers c
+JOIN Orders o 
+    ON c.CustomerID = o.CustomerID
+WHERE o.Status = 'Delivered'
+GROUP BY c.CustomerID, c.Name;
+
+
+Purpose
+To measure completed purchases per customer.
+
+Query Logic
+ - Filter only Status = 'Delivered'
+ - Count distinct OrderID
+ - Group by customer
+
+Why COUNT(DISTINCT OrderID)?
+Prevents:
+ - Duplicate counting
+ - Errors if joins multiply rows
+
+Business Insight
+This helps measure:
+ - Customer loyalty
+ - Conversion success
+ - Purchase completion behavior
+
+
+
+Q2 —  Top 5 Best-Selling Products
+
+code:-
+SELECT 
+    p.ProductID,
+    p.ProductName,
+    SUM(od.Quantity) AS TotalQuantitySold
+FROM OrderDetails od
+JOIN Products p 
+    ON od.ProductID = p.ProductID
+GROUP BY p.ProductID, p.ProductName
+ORDER BY TotalQuantitySold DESC
+LIMIT 5;
+
+
+Objective
+Identify the products that sold the most units.
+
+How It Works
+OrderDetails contains line items (each product in an order).
+We join OrderDetails with Products.
+We group by product.
+We sum quantities.
+We sort in descending order.
+We limit to 5 results.
+
+Core Table Used
+ - OrderDetails
+
+Because:
+ - Each row represents a product sold in an order.
+ - Quantity tells how many units were sold.
+
+Business Insight
+This helps measure:
+ - Customer like to buy
+ - which product is demanded
+ - which items generate the highest profite
+
+
+Q5 — Total Discount Applied to Each Order
+
+code:-
+SELECT 
+    o.OrderID,
+    IFNULL(SUM(oc.DiscountAmount), 0) AS TotalDiscount
+FROM Orders o
+LEFT JOIN OrderCoupons oc 
+    ON o.OrderID = oc.OrderID
+GROUP BY o.OrderID;
+
+Why LEFT JOIN?
+ - Some orders may not use coupons.
+
+Logical Flow
+Start with Orders
+Join OrderCoupons
+Sum discount amounts per order
+Group by OrderID
+
+Business Meaning
+This helps measure:
+Total promotional cost
+Impact of coupons on revenue
+Order-level discount breakdown
+
+Q6 — Orders Placed Each Month
+
+code:-
+SELECT 
+    YEAR(OrderDate) AS Year,
+    MONTH(OrderDate) AS Month,
+    COUNT(*) AS TotalOrders
+FROM Orders
+GROUP BY YEAR(OrderDate), MONTH(OrderDate)
+ORDER BY Year, Month;
+
+
+How It Works
+Extract year from OrderDate
+Extract month from OrderDate
+Count total orders per month
+Group by year and month
+
+Why Group by Both Year and Month?
+ - Without year grouping, months across years merge incorrectly.
+
+Business Meaning
+This provides:
+Monthly sales trend
+Seasonality insights
+Growth tracking
+
+
+Q8 — Customers Who Have Spent the Most
+
+code:-
+SELECT 
+    c.CustomerID,
+    c.Name,
+    SUM(o.TotalAmount) AS TotalSpent
+FROM Customers c
+JOIN Orders o 
+    ON c.CustomerID = o.CustomerID
+GROUP BY c.CustomerID, c.Name
+ORDER BY TotalSpent DESC;
+
+
+Logical Steps
+Join Customers and Orders
+Group by customer
+Sum total spending
+Sort descending
+
+Business Meaning
+This identifies:
+High-value customers
+VIP buyers
+Revenue concentration
+Loyalty programs
+
+
+Q9 — What is the average rating and total reviews for each product?
+code :-
+SELECT 
+    p.ProductID,
+    p.ProductName,
+    AVG(pr.Rating) AS AverageRating,
+    COUNT(pr.ReviewID) AS TotalReviews
+FROM Products p
+LEFT JOIN ProductReviews pr 
+    ON p.ProductID = pr.ProductID
+GROUP BY p.ProductID, p.ProductName;
+
+
+To analyze product performance.
+Query Logic
+ - LEFT JOIN ensures all products appear (even with no reviews)
+ - AVG(Rating) calculates average satisfaction
+ - COUNT(ReviewID) counts number of reviews
+ - GROUP BY ProductID
+
+Why LEFT JOIN?
+Without it, products with zero reviews would not appear.
+
+Business Insight
+This query helps:
+ - Identify top-rated products
+ - Detect poorly rated items
+ - Measure customer engagement
+
+
+
+
+Q1 — Average Prices by Category (Filtered > $100)
+
+code:-
+SELECT
+    Category,
+    AVG(Price) AS AveragePrice
+FROM Products
+GROUP BY Category
+HAVING AVG(Price) > 100;
+
+What the Query Does
+ - It calculates the average product price per category, then filters out categories whose average price is ≤ 100.
+
+Why Use HAVING Instead of WHERE?
+WHERE filters rows before grouping.
+HAVING filters results after aggregation.
+
+Logical Execution Flow
+Group all products by Category
+Compute average price per group
+Remove groups where average ≤ 100
+Return remaining categories
+
+Business Meaning
+This identifies:
+Premium categories
+High-value product segments
+Strategic pricing tiers
+
+
+Q4 — Products That Received 5-Star Reviews
+
+code:-
+SELECT DISTINCT
+    p.ProductID,
+    p.ProductName
+FROM ProductReviews pr
+JOIN Products p
+    ON pr.ProductID = p.ProductID
+WHERE pr.Rating = 5;
+
+Why DISTINCT Is Used
+ - If a product has multiple 5-star reviews, it would appear multiple times.
+
+Logical Flow
+Filter ProductReviews where Rating = 5
+Join with Products to get product names
+Remove duplicates
+
+Business Meaning
+This helps identify:
+Top-rated products
+High customer satisfaction items
+Candidates for promotion
+
+
+Q10 — Shipments Handled by Each Carrier
+
+code:-
+SELECT
+    Carrier,
+    COUNT(*) AS TotalShipments
+FROM Shipments
+GROUP BY Carrier;
+
+
+Logical Flow
+Read all rows from Shipments
+Group them by Carrier
+Count number of shipments per carrier
+
+Why This Is Useful
+This helps measure:
+Logistics load distribution
+Carrier performance volume
+Vendor dependency
+
+Q11 — Orders Placed in the Year 2024
+
+code:-
+SELECT *
+FROM Orders
+WHERE YEAR(OrderDate) = 2024;
+
+
+Logical Flow
+Extract the year from OrderDate
+Keep only rows where year = 2024
+Return matching orders
+
+Business Meaning
+This query helps:
+Annual reporting
+Yearly revenue analysis
+Little comparisons
+
